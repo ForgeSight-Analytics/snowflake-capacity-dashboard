@@ -21,6 +21,49 @@ the even-burn pace line, with the projected overage date marked.
 
 ---
 
+## Validation status
+
+**Read this before you trust a number.**
+
+This has been validated against **one organization**: a single prepaid capacity
+contract, billed in USD, with organization-usage grants in place. On that
+account every tile reconciles exactly, including against the figures the
+Snowflake account team quoted independently.
+
+Everything beyond that shape is **unit-tested but has never run against real
+data**:
+
+| Area | Status |
+|---|---|
+| Single contract, single currency, USD | Verified against a live account |
+| Organizations with more than one contract | Unit-tested only |
+| Organizations billed in more than one currency | Unit-tested only |
+| Non-USD currency formatting | Unit-tested only |
+| Renewal boundary (new contract, no balance row yet) | Unit-tested only |
+| Organization accounts (GLOBALORGADMIN model) | Not tested |
+
+The unit tests use a fake session that asserts the generated SQL contains the
+right filters. That proves the query is *built* correctly. It does not prove it
+returns the right rows from a real organization of that shape.
+
+**So before you rely on it:**
+
+1. Run [`sql/00_verify_access.sql`](sql/00_verify_access.sql). It reports how
+   many contracts and how many currencies your organization has. If either is
+   greater than one, you are outside the tested shape.
+2. Check the **Adjustments** figure in the footnote. It is a residual, so it
+   absorbs any error in the model. Near zero means the books close; a large
+   value means something does not reconcile and the tiles should not be trusted
+   until you know why.
+3. Compare the Remaining Balance tile against **Admin → Cost Management →
+   Organization Overview** in Snowsight. They should agree.
+
+If you run this on a multi-contract or multi-currency organization, an issue
+reporting what you saw — right or wrong — is the single most useful
+contribution you can make.
+
+---
+
 ## Why this exists
 
 Snowsight shows contract balance under **Admin → Cost Management → Organization
@@ -165,15 +208,16 @@ assumed to be USD.
 ## Tests
 
 The test suite is the useful part if you plan to modify this. It encodes the
-reconciliation contract — what the tiles must add up to — and pins the two
-projection bugs that were found and fixed during development.
+reconciliation contract — what the tiles must add up to — and pins the bugs
+found and fixed during development: two in the projection models, and one where
+the balance row could silently belong to a different contract.
 
 ```bash
 pip install -r requirements-dev.txt
 pytest
 ```
 
-87 tests, no Snowflake connection required: `streamlit`, `altair` and
+95 tests, no Snowflake connection required: `streamlit`, `altair` and
 `snowflake.snowpark` are stubbed, and a fake session records SQL so the
 contract and currency filters can be asserted offline.
 

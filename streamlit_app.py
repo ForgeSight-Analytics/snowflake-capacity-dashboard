@@ -279,6 +279,33 @@ def select_current_contract(contract: pd.DataFrame, today: date) -> pd.DataFrame
     return df[df["contract_number"] == number]
 
 
+def balance_scope_status(balance: pd.DataFrame, contract_number) -> str:
+    """
+    Whether the balance row can be tied to the contract being reported.
+
+    load_latest_balance falls back to the newest row across all contracts when
+    the scoped query finds nothing. That fallback is correct for organizations
+    that leave contract_number NULL in this view, but wrong the moment it
+    returns a *different* contract's balance: the tiles would then pair one
+    contract's purchased capacity with another contract's remaining balance and
+    every figure would be wrong, with nothing on screen to say so. The most
+    likely trigger is the days just after a renewal, when the new contract
+    exists in CONTRACT_ITEMS but has no balance row yet.
+
+    Returns "match", "unknown" (no contract number on the balance row, so the
+    pairing cannot be checked) or "mismatch".
+    """
+    if balance.empty or "contract_number" not in balance.columns:
+        return "unknown"
+    raw = balance.iloc[0]["contract_number"]
+    try:
+        if raw is None or pd.isna(raw):
+            return "unknown"
+    except (TypeError, ValueError):
+        return "unknown"
+    return "match" if _contract_label(raw) == _contract_label(contract_number) else "mismatch"
+
+
 def reconcile(
     contract: pd.DataFrame, balance: pd.DataFrame, usage: pd.DataFrame
 ) -> CapacityPosition:
@@ -707,6 +734,23 @@ def main():
         )
         return
 
+    scope = balance_scope_status(balance, contract_number)
+    if scope == "mismatch":
+        st.error(
+            f"The latest balance row belongs to contract "
+            f"**{_contract_label(balance.iloc[0]['contract_number'])}**, not to "
+            f"**{_contract_label(contract_number)}**, the contract in force today. "
+            "Reporting them together would pair one contract's purchased capacity "
+            "with another contract's remaining balance, so no figures are shown."
+        )
+        st.info(
+            "This usually means REMAINING_BALANCE_DAILY has no rows yet for the "
+            "current contract, which is common in the days after a renewal given "
+            "the view's 72-hour latency. Try again once the first balance row for "
+            "the new contract lands."
+        )
+        return
+
     currency = str(balance.iloc[0]["currency"])
     contract_start = min(current["start_date"])
     usage = load_daily_usage(contract_start, currency)
@@ -755,6 +799,12 @@ def main():
         render_tiles(pos, projected_overage, days_left)
     with footnote_slot:
         render_footnote(pos)
+        if scope == "unknown":
+            st.caption(
+                ":warning: The balance row carries no contract number, so it "
+                "could not be tied to this contract. Figures are shown on the "
+                "assumption that the organization has a single active contract."
+            )
 
     with right:
         render_chart(pos, history, forecast, proj_date)
