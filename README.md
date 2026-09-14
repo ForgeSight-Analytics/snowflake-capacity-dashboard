@@ -15,9 +15,16 @@ Total Capacity Used, Projected Net Overage, Days to Overage, Remaining Balance
 chart of daily actuals (blue), forecast (orange), cumulative consumption and
 the even-burn pace line, with the projected overage date marked.
 
-> Add a screenshot at `docs/screenshot.png` and restore the image tag here if
-> you want one in the README; it is omitted rather than committing a picture of
-> someone's real contract figures.
+![The dashboard, rendered against synthetic data](docs/screenshot.png)
+
+The figures above are generated, not real. `docs/demo_app.py` swaps the three
+loaders for invented data and calls `main()`, so you can reproduce that render
+locally with `streamlit run docs/demo_app.py` and no Snowflake connection.
+
+If you publish a screenshot of your own instance, render it the same way rather
+than editing the tiles in an image editor: the chart plots your actual daily
+consumption curve, and its spikes, step changes and weekday rhythm identify your
+spend whatever the tiles say.
 
 ---
 
