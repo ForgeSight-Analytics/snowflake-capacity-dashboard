@@ -30,6 +30,12 @@ contract, billed in USD, with organization-usage grants in place. On that
 account every tile reconciles exactly, including against the figures the
 Snowflake account team quoted independently.
 
+The revision published here was run against that live account on 2026-09-14 —
+not just the code it was derived from. The reconciliation closed to the cent
+(`used + remaining == purchased + rollover`, adjustments residual of zero), the
+contract-scoped balance query returned the expected row, and the currency-scoped
+usage query produced figures that tie out.
+
 Everything beyond that shape is **unit-tested but has never run against real
 data**:
 
