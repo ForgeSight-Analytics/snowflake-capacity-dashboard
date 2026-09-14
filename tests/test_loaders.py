@@ -143,3 +143,61 @@ def test_mixing_currencies_would_overstate_spend(app):
     combined = app.daily_series(mixed).sum()
     assert combined == pytest.approx(single * 2)
     assert combined > single
+
+
+# -- the balance must belong to the contract being reported -----------------
+#
+# Regression: the fallback in load_latest_balance silently returned the newest
+# row from *any* contract. After a renewal — new contract in CONTRACT_ITEMS, no
+# balance row for it yet — that paired the new contract's purchased capacity
+# with the old contract's remaining balance and every tile was wrong, with no
+# warning. The app now refuses to render instead.
+
+
+def test_scope_status_match(app):
+    assert app.balance_scope_status(fx.balance_row(), fx.CONTRACT) == "match"
+
+
+def test_scope_status_match_when_snowpark_returns_a_float(app):
+    balance = fx.balance_row()
+    balance["contract_number"] = balance["contract_number"].astype(object)
+    balance.loc[0, "contract_number"] = float(fx.CONTRACT)
+    assert app.balance_scope_status(balance, fx.CONTRACT) == "match"
+
+
+def test_scope_status_mismatch_is_detected(app):
+    balance = fx.balance_row()
+    balance.loc[0, "contract_number"] = fx.EXPIRED_CONTRACT
+    assert app.balance_scope_status(balance, fx.CONTRACT) == "mismatch"
+
+
+@pytest.mark.parametrize("value", [None, float("nan")])
+def test_scope_status_unknown_when_contract_number_is_null(app, value):
+    balance = fx.balance_row()
+    balance["contract_number"] = balance["contract_number"].astype(object)
+    balance.loc[0, "contract_number"] = value
+    assert app.balance_scope_status(balance, fx.CONTRACT) == "unknown"
+
+
+def test_scope_status_unknown_when_column_absent(app):
+    assert app.balance_scope_status(
+        fx.balance_row().drop(columns=["contract_number"]), fx.CONTRACT
+    ) == "unknown"
+
+
+def test_scope_status_unknown_on_empty_frame(app):
+    assert app.balance_scope_status(pd.DataFrame(), fx.CONTRACT) == "unknown"
+
+
+def test_renewal_scenario_is_caught(app, fake):
+    """
+    End to end: the scoped query finds nothing for the new contract, the loader
+    falls back to the old contract's row, and the scope check catches it.
+    """
+    old_balance = fx.balance_row()
+    old_balance.loc[0, "contract_number"] = fx.EXPIRED_CONTRACT
+    fake(pd.DataFrame(), upper(old_balance))
+
+    balance = app.load_latest_balance(fx.CONTRACT)
+    assert not balance.empty
+    assert app.balance_scope_status(balance, fx.CONTRACT) == "mismatch"
