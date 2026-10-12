@@ -15,6 +15,12 @@ Total Capacity Used, Projected Net Overage, Days to Overage, Remaining Balance
 chart of daily actuals (blue), forecast (orange), cumulative consumption and
 the even-burn pace line, with the projected overage date marked.
 
+The third tile is signed and its label follows the sign: an organization on
+course to finish *under* its commitment sees **Projected Net Underage** and a
+negative figure, rather than an overage of zero. The fourth reads `None in term`
+when the balance is forecast to run out only after the contract ends, and quotes
+that date instead of counting down to it.
+
 ![The dashboard, rendered against synthetic data](docs/screenshot.png)
 
 The figures above are generated, not real. `docs/demo_app.py` swaps the three

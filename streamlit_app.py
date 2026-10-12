@@ -495,7 +495,20 @@ def md_money(value: float, currency: str = "USD", decimals: int = 0) -> str:
     return money(value, currency, decimals).replace("$", "\\$")
 
 
-def render_tiles(pos: CapacityPosition, projected_overage: float, days_left: int | None):
+def render_tiles(
+    pos: CapacityPosition, projected_net: float, proj_date: date | None
+):
+    """
+    projected_net is signed: positive is a projected overage, negative is a
+    projected underage (capacity left unused at contract end). The tile label
+    follows the sign and the figure keeps it, so an underage reads as a negative
+    amount the way the equivalent Snowflake-side view presents it.
+
+    proj_date is the date the balance is forecast to reach zero, which can fall
+    *after* the contract ends: the forecast deliberately runs past contract end
+    so a date exists to quote. A date beyond the term is not an overage on this
+    contract, and the tile says so rather than counting down to it.
+    """
     c1, c2, c3, c4, c5 = st.columns(5)
 
     c1.metric(
@@ -511,17 +524,21 @@ def render_tiles(pos: CapacityPosition, projected_overage: float, days_left: int
         delta_color="off",
     )
     c3.metric(
-        "Projected Net Overage",
-        money(projected_overage, pos.currency),
+        "Projected Net Underage" if projected_net < 0 else "Projected Net Overage",
+        money(projected_net, pos.currency),
         f"ContractEnd: {pos.contract_end:%m/%d/%Y}",
         delta_color="off",
     )
-    c4.metric(
-        "Days to Overage",
-        f"{days_left} days" if days_left is not None else "None projected",
-        "Within contract term" if days_left is not None else "Capacity sufficient",
-        delta_color="off",
-    )
+    if proj_date is None:
+        days_value, days_note = "None projected", "Capacity sufficient"
+    elif proj_date > pos.contract_end:
+        days_value = "None in term"
+        days_note = f"At this rate: {proj_date:%m/%d/%Y}"
+    else:
+        days_value = f"{(proj_date - pos.as_of).days} days"
+        days_note = "Within contract term"
+
+    c4.metric("Days to Overage", days_value, days_note, delta_color="off")
     c5.metric(
         "Remaining Balance",
         money(pos.remaining, pos.currency),
@@ -789,14 +806,15 @@ def main():
     horizon = max((pos.contract_end - max(history.index)).days, 0) + 400
     forecast = project(history, window, horizon, method)
     proj_date = overage_date(forecast, pos.remaining)
-    days_left = (proj_date - pos.as_of).days if proj_date else None
 
-    # Projected overage = forecast spend through contract end, less what's left.
+    # Signed net position at contract end: forecast spend through the end of the
+    # term, less the balance available to absorb it. Positive is an overage;
+    # negative is an underage, i.e. capacity expected to go unused.
     through_end = forecast[[d <= pos.contract_end for d in forecast.index]]
-    projected_overage = max(through_end.sum() - pos.remaining, 0.0)
+    projected_net = through_end.sum() - pos.remaining
 
     with tiles_slot:
-        render_tiles(pos, projected_overage, days_left)
+        render_tiles(pos, projected_net, proj_date)
     with footnote_slot:
         render_footnote(pos)
         if scope == "unknown":
