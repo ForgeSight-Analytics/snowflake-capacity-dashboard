@@ -49,12 +49,22 @@ not just the code it was derived from. The reconciliation closed to the cent
 contract-scoped balance query returned the expected row, and the currency-scoped
 usage query produced figures that tie out.
 
+Re-verified on the same account on 2026-10-12, by which point its consumption
+had fallen and it was tracking to finish **under** its commitment. That exercised
+two paths the September run could not: the signed net-position tile reporting a
+projected underage, and the days-to-overage tile correctly declining to count
+down to a zero-balance date that falls after contract end. The projected underage
+was also reconciled by hand against the run rate at each window (at 30 days,
+remaining balance less daily rate times days remaining, to the dollar).
+
 Everything beyond that shape is **unit-tested but has never run against real
 data**:
 
 | Area | Status |
 |---|---|
 | Single contract, single currency, USD | Verified against a live account |
+| Projected overage | Verified against a live account |
+| Projected underage (tracking under commitment) | Verified against a live account |
 | Organizations with more than one contract | Unit-tested only |
 | Organizations billed in more than one currency | Unit-tested only |
 | Non-USD currency formatting | Unit-tested only |
